@@ -1,0 +1,323 @@
+---
+title: "Trabalho de Modelos 2"
+author: "Isabele A. Small"
+date: "13 de dezembro de 2018"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r bibliotecas, include=FALSE, warning=FALSE}
+if(!require(tidyverse)) install.packages("tidyverse")
+library(tidyverse)
+library(knitr)
+if(!require(read.dbc) ) install.packages( "read.dbc" ) 
+library(read.dbc) 
+```
+
+```{r lendo o sinasc, include=FALSE}
+
+gestantes <- read.dbc("DNRJ2016.dbc", as.is = T) %>%
+  mutate(municipio = as.numeric(CODMUNRES),
+         NUMERODN = ifelse(as.numeric(NUMERODN) >1,1,0),
+         idade_10_19 = ifelse(as.numeric(IDADEMAE) <=19, 1, 0),
+         escolaridade_12 = ifelse(is.na(ESCMAE), 0, ifelse(as.numeric(ESCMAE) == 5, 1, 0)),
+         escolaridade_baixa = ifelse(is.na(ESCMAE), 0, ifelse(as.numeric(ESCMAE) <=3, 1, 0)),
+         pretas = ifelse(is.na(RACACORMAE), 0, ifelse(as.numeric(RACACORMAE) == 2, 1, 0)),
+         brancas = ifelse(is.na(RACACORMAE), 0, ifelse(as.numeric(RACACORMAE) == 1, 1, 0)),
+         pardas = ifelse(is.na(RACACORMAE), 0, ifelse(as.numeric(RACACORMAE) == 4, 1, 0)),
+         solteiras = ifelse(is.na(ESTCIVMAE), 0, ifelse(as.numeric(ESTCIVMAE) == 1, 1, 0)),
+         casadas = ifelse(is.na(ESTCIVMAE), 0, ifelse(as.numeric(ESTCIVMAE) == 2 , 1, ifelse(as.numeric(ESTCIVMAE) == 5, 1, 0))),
+         adequado = ifelse(is.na(CONSPRENAT), 0, ifelse(as.numeric(CONSPRENAT) >=6 & (as.numeric(MESPRENAT)) <=3, 1, 0))
+         ) %>%
+  filter(municipio > 330000) %>% 
+  group_by(municipio) %>% 
+  summarise(nascidos = sum(NUMERODN),
+            adolescentes = sum(idade_10_19, na.rm = idade_10_19),
+            idade_10_19 = (sum(idade_10_19, na.rm = idade_10_19))/nascidos,
+            brancas = sum(brancas, na.rm = brancas),
+            brancas = (sum(brancas, na.rm = brancas))/nascidos,
+            pretas = sum(pretas, na.rm = pretas),
+            pretas = (sum(pretas, na.rm = pretas))/nascidos,
+            pardas = sum(pardas, na.rm = pardas),
+            pardas = (sum(pardas, na.rm = pardas))/nascidos,
+            escolaridade = sum(escolaridade_12, na.rm = escolaridade_12),
+            escolaridade = (sum(escolaridade_12, na.rm = escolaridade_12))/nascidos,
+            escolaridade_baixa = sum(escolaridade_baixa, na.rm = escolaridade_baixa),
+            escolaridade_baixa = (sum(escolaridade_baixa, na.rm = escolaridade_baixa))/nascidos,
+            solteiras = sum(solteiras, na.rm = solteiras),
+            solteiras = (sum(solteiras, na.rm = solteiras))/nascidos,
+            casadas = sum(casadas, na.rm = casadas),
+            casadas = (sum(casadas, na.rm = casadas))/nascidos,
+            adequado = sum(adequado, na.rm = adequado),
+            adequado = (sum(adequado, na.rm = adequado))/nascidos
+            ) 
+```
+
+
+
+
+```{r lendo o sinan, include=FALSE}
+casos<- read_csv2("https://raw.githubusercontent.com/IsaSmall/myrepo/master/sinan.csv") %>%
+  filter(municipio != "Total") %>% 
+  mutate(nome_municipio = gsub ('^[0-9]{6}\\s(.*)','\\1', municipio),
+         n_sifil = as.numeric(n_sifilis_congenita),
+         parceiro_tratado = (as.numeric(parceiro_tratado_s))/n_sifil,
+         diag_prenatal = (as.numeric(diag_materno_prenatal))/n_sifil,
+         diag_parto = (as.numeric(diag_materno_parto))/n_sifil
+         ) %>% 
+  separate(municipio, c('cod','nome'), sep=' ') %>%
+  mutate(cod = as.numeric(cod)) 
+```
+
+```{r juntando os dois bancos, include=FALSE}
+sifu<- gestantes %>% 
+  left_join (casos, by = c("municipio" = "cod")
+             ) %>%
+  mutate(n_sifil = ifelse(is.na(n_sifil), 0, as.numeric(n_sifil)),
+         parceiro_tratado = ifelse(is.na(parceiro_tratado),0 , as.numeric(parceiro_tratado)),
+         diag_prenatal = ifelse(is.na(diag_prenatal), 0, as.numeric(diag_prenatal)),
+         diag_parto = ifelse(is.na(diag_parto) , 0, as.numeric(diag_parto)),
+         incidencia = n_sifil / nascidos,
+         incidencia_mil = incidencia *1000)
+  
+```
+
+#
+
+```{r histograma incidencia, echo=FALSE}
+hist(sifu$incidencia, xlab = "incidencia de sifilis", main = "Todos os municipios do RJ")
+```
+
+#
+
+```{r}
+summary(sifu)
+
+sum(sifu$nascidos)
+
+sum(sifu$n_sifil)
+```
+
+#
+
+### VERIFICANDO MULTICOLINEARIDADE
+
+#
+
+```{r biblioteca car para vif , include=FALSE, warning=FALSE}
+if(!require(car)) install.packages("car")
+library(car)
+```
+
+
+```{r vif , echo=FALSE}
+vif(glm(n_sifil ~ adequado + brancas + solteiras + casadas + escolaridade + idade_10_19 + escolaridade_baixa, family = poisson, data = sifu))
+
+vif(glm(n_sifil ~ adequado + brancas + solteiras + escolaridade, family = poisson, data = sifu))
+
+vif(glm(n_sifil ~ adequado + brancas + solteiras + idade_10_19, family = poisson, data = sifu))
+
+```
+
+#
+
+### OBTENDO AS RAZÕES DE TAXAS BRUTAS
+
+#
+
+```{r idade 10 19, echo=FALSE, warning=FALSE}
+sifu.idade<- glm(n_sifil ~ idade_10_19 + offset(log(nascidos)), data = sifu, family = poisson)
+summary(sifu.idade)
+
+est.idade <- cbind(Estimate = exp(coef(sifu.idade)), exp(confint(sifu.idade)))
+kable(est.idade, align = "c", digits = 3)
+```
+
+#
+
+```{r escolaridade alta, echo=FALSE, warning=FALSE}
+sifu.escola<- glm(n_sifil ~ escolaridade + offset(log(nascidos)), data = sifu, family = poisson)
+summary(sifu.escola)
+
+est.escola <- cbind(Estimate = exp(coef(sifu.escola)), exp(confint(sifu.escola)))
+kable(est.escola, align = "c", digits = 3)
+```
+
+#
+
+```{r escolaridade baixa, echo=FALSE, warning=FALSE}
+sifu.escbaixa<- glm(n_sifil ~ escolaridade_baixa + offset(log(nascidos)), data = sifu, family = poisson)
+summary(sifu.escbaixa)
+
+est.escbaixa <- cbind(Estimate = exp(coef(sifu.escbaixa)), exp(confint(sifu.escbaixa)))
+kable(est.escbaixa, align = "c", digits = 3)
+```
+
+#
+
+```{r pretas, echo=FALSE, warning=FALSE}
+sifu.pretas<- glm(n_sifil ~ pretas + offset(log(nascidos)), data = sifu, family = poisson)
+summary(sifu.pretas)
+
+est.pretas <- cbind(Estimate = exp(coef(sifu.pretas)), exp(confint(sifu.pretas)))
+kable(est.pretas, align = "c", digits = 3)
+```
+
+#
+
+```{r pardas, echo=FALSE, warning=FALSE}
+sifu.pardas<- glm(n_sifil ~ pardas + offset(log(nascidos)), data = sifu, family = poisson)
+summary(sifu.pardas)
+
+est.pardas <- cbind(Estimate = exp(coef(sifu.pardas)), exp(confint(sifu.pardas)))
+kable(est.pardas, align = "c", digits = 3)
+```
+
+#
+
+```{r solteiras, echo=FALSE, warning=FALSE}
+sifu.solteiras<- glm(n_sifil ~ solteiras + offset(log(nascidos)), data = sifu, family = poisson)
+summary(sifu.solteiras)
+
+est.solteiras <- cbind(Estimate = exp(coef(sifu.solteiras)), exp(confint(sifu.solteiras)))
+kable(est.solteiras, align = "c", digits = 3)
+```
+
+#
+
+```{r adequado, echo=FALSE, warning=FALSE}
+sifu.adequado<- glm(n_sifil ~ adequado + offset(log(nascidos)), data = sifu, family = poisson)
+summary(sifu.adequado)
+
+est.adequado <- cbind(Estimate = exp(coef(sifu.adequado)), exp(confint(sifu.adequado)))
+kable(est.adequado, align = "c", digits = 3)
+```
+
+#
+
+### Correlações entre as variáveis explicativas
+
+```{r, echo=FALSE}
+cor.test(sifu$adequado, sifu$escolaridade)
+cor.test(sifu$adequado, sifu$brancas)
+cor.test(sifu$adequado, sifu$idade_10_19)
+
+```
+
+#
+
+###MODELOS MÚLTIPLOS - Regressão de Poisson
+
+#
+
+```{r m1 adequado, echo=FALSE, warning=FALSE}
+m1<- glm(n_sifil ~ adequado + offset(log(nascidos)), data = sifu, family = poisson)
+summary(m1)
+
+est.m1 <- cbind(Estimate = exp(coef(m1)), exp(confint(m1)))
+kable(est.m1, align = "c", digits = 3)
+```
+
+#
+
+```{r m2, echo=FALSE, warning=FALSE}
+m2<- glm(n_sifil ~ adequado + brancas + offset(log(nascidos)), data = sifu, family = poisson)
+summary(m2)
+
+est.m2 <- cbind(Estimate = exp(coef(m2)), exp(confint(m2)))
+kable(est.m2, align = "c", digits = 3)
+```
+
+#
+
+```{r m3, echo=FALSE, warning=FALSE}
+m3<- glm(n_sifil ~ adequado + brancas + escolaridade_baixa , offset(log(nascidos)), data = sifu, family = poisson)
+summary(m3)
+
+est.m3 <- cbind(Estimate = exp(coef(m3)), exp(confint(m3)))
+kable(est.m3, align = "c", digits = 3)
+```
+
+#
+
+```{r m4, echo=FALSE, warning=FALSE}
+m4<- glm(n_sifil ~ adequado + brancas + escolaridade_baixa + casadas, offset(log(nascidos)), data = sifu, family = poisson)
+summary(m4)
+est.m4 <- cbind(Estimate = exp(coef(m4)), exp(confint(m4)))
+kable(est.m4, align = "c", digits = 3)
+
+```
+```{r m5, echo=FALSE, warning=FALSE}
+m5<- glm(n_sifil ~ adequado + brancas + casadas + escolaridade_baixa, offset(log(nascidos)), data = sifu, family = poisson)
+summary(m5)
+```
+#
+
+#### Encontrando o melhor modelo. O melhor é o segundo (m2 - solteiras e brancas)
+
+#
+
+```{r anova, echo=FALSE, warning=FALSE}
+anova(m1,m2,m3,m4,m5)
+```
+
+#
+
+#### Analisando os resíduos (ficou um desastre, vamos verificar a dispersão e partir para a binomial negativa)
+
+#
+
+```{r biblioteca envelope, include=FALSE, warning=FALSE}
+if(!require(hnp)) install.packages("hnp")
+library(hnp)
+```
+
+
+```{r envelope residuos, echo=FALSE, warning=FALSE}
+par(mfrow = c(1,1))
+hnp(m2, sim=19, conf=1)
+```
+
+#
+
+#### Calculando a dispersão (teste significativo para dispersão. Valor de theta inicial: 8.251524)
+
+#
+
+```{r biblioteca AER para dispersao, include=FALSE, warning=FALSE}
+if(!require(AER)) install.packages("AER")
+library(AER)
+```
+
+```{r teste de dispersao, echo=FALSE, warning=FALSE}
+dispersiontest(m2) #supondo o nível de significancia de 5% estamos rejetando a hipótese nula. O modelo está ruim.
+```
+
+#
+
+####Usando a regressão binomial negativa
+
+#
+
+```{r binomial negativa, echo=FALSE, warning=FALSE}
+bn2<- glm.nb(n_sifil ~ adequado + brancas + offset(log(nascidos)), init.theta = 8.044253, data = sifu, link = log)
+summary(bn2)
+
+est.m2 <- cbind(Estimate = exp(coef(bn2)), exp(confint(bn2)))
+kable(est.m2, align = "c", digits = 3)
+```
+
+#
+
+####Verificando os resíduos da binomial negativa
+
+#
+
+```{r envelope residuos bn, echo=FALSE, warning=FALSE}
+par(mfrow = c(1,1))
+hnp(bn2, sim=19, conf=1)
+```
+
