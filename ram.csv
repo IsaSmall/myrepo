@@ -1,4 +1,4 @@
-Código paciente;faixa de idade ;nº de ciclos ;Desordens gastrointestinais;Desordens dermatológicas;Desordens gerais;Desordens SNC;Desordens laboratoriais;Desordens hematológicas;Comorbidades 
+id;fetar;ciclos;gastrointestinais;dermatologicas;gerais;SNC;laboratoriais;hematologicas;Comorbidades 
 1;24-39;4;5;4;2;1;0;0;nao
 2;40-59;4;11;6;3;0;3;0;nao
 3;40-59;4;3;6;1;0;2;3;nao
